@@ -1,6 +1,9 @@
 const userModel = require("../models/user-model");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const { subscribeToQueue } = require("../service/rabbit");
+const EventEmitter = require("events");
+const rideEventEmitter = new EventEmitter();
 
 module.exports.register = async (req, res) => {
   try {
@@ -68,3 +71,20 @@ module.exports.profile = async (req, res) => {
     res.status(400).json({ message: error });
   }
 };
+
+module.exports.acceptedRide = async (req, res) => {
+  // Long polling: wait for 'ride-accepted' event
+  rideEventEmitter.once("ride-accepted", (data) => {
+    res.send(data);
+  });
+
+  // Set timeout for long polling (e.g., 30 seconds)
+  setTimeout(() => {
+    res.status(204).send();
+  }, 30000);
+};
+
+subscribeToQueue("ride-accepted", async (msg) => {
+  const data = JSON.parse(msg);
+  rideEventEmitter.emit("ride-accepted", data);
+});
